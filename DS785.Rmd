@@ -1,0 +1,1217 @@
+---
+title: "DS785_Capstone"
+author: "Nicole Kuberra"
+date: "2024-04-23"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
+```
+
+#Load Libraries
+```{r}
+
+library(readr)
+library(dplyr)
+library(lubridate)
+library(tidyverse)
+library(ggcorrplot)
+library(GGally)
+library(corrplot)
+library(ggplot2)
+library(ggformula)
+library(caret)
+library(nnet)
+library(NeuralNetTools)
+library(randomForest)
+library(RColorBrewer)
+
+
+```
+
+#Load Data
+```{r}
+
+#Data sources redacted for privacy
+
+setwd("xxxx")
+df = read.csv("xxxx")
+weather = read.csv("xxxx")
+
+```
+
+#Data Cleaning/Exploration
+```{r}
+
+df = df[c(1,2,3)]
+
+df$Date = format(mdy(df$Date))
+
+colnames(df) = c('DATE', 'ITEM', 'QTY')
+
+df = df %>%
+  mutate('Filter' = ifelse(ITEM == '#201' | ITEM == '#210' | ITEM == '#213' | ITEM == 'X6670' | ITEM == 'Intercept', "yes", "no"))
+
+splits = split(df, df$Filter)
+
+filters = as.data.frame(splits[[2]])
+others = as.data.frame(splits[[1]])
+
+filters = filters %>%
+  group_by(DATE) %>%
+  summarise(totals = sum(QTY))
+
+
+```
+
+
+```{r}
+
+weather = weather[weather$'STATION' == 'USW00014898', ]
+
+weather = weather[c('DATE', 'PRCP', 'SNOW', 'TMAX', 'TMIN', 'TAVG', 'WSF5', 'AWND')]
+
+```
+
+```{r}
+
+data_filter = merge(x = filters, y = weather, by = 'DATE')
+
+data_others = merge(x = others, y = weather, by = 'DATE')
+
+data_others = data_others %>%
+  select(-('Filter'))
+
+```
+
+```{r}
+
+splits2 = split(data_others, data_others$ITEM)
+
+acs = as.data.frame(splits2[[1]])
+
+furnaces = as.data.frame(splits2[[2]])
+
+no_acs = as.data.frame(splits2[[3]])
+no_heat = as.data.frame(splits2[[4]])
+
+```
+
+#filters
+```{r}
+
+data_filter2 = data_filter %>%
+  mutate(month = month(DATE)) %>%
+  group_by(month) %>%
+  summarise(total = sum(totals))
+
+ggplot(data_filter2, 
+       aes(x = factor(month), y = total)) + 
+  geom_bar(stat="identity", fill="steelblue", color="black") +
+  ggtitle("Number of Filters Sold") + labs(y = "Total Sold", x = "Month") +
+  scale_x_discrete(breaks = 1:12, labels = c("Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sept", "Oct", "Nov", "Dec"))
+
+```
+
+
+#A/Cs
+```{r}
+
+acs2 = acs %>%
+  mutate(month = month(DATE)) %>%
+  group_by(month) %>%
+  summarise(total = sum(QTY))
+
+ggplot(acs2, 
+       aes(x = factor(month), y = total)) + 
+  geom_bar(stat="identity", fill="steelblue", color="black") + 
+  ggtitle("Number of Air Conditioners Sold") + labs(y = "Total Sold", x = "Month") +
+  scale_x_discrete(breaks = 1:12, labels = c("Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sept", "Oct", "Nov", "Dec"))
+
+
+```
+
+#Furnaces
+```{r}
+furnaces2 = furnaces %>%
+  mutate(month = month(DATE)) %>%
+  group_by(month) %>%
+  summarise(total = sum(QTY))
+
+ggplot(furnaces2, 
+       aes(x = factor(month), y = total)) + 
+  geom_bar(stat="identity", fill="steelblue", color="black") +
+  ggtitle("Number of Furnaces Sold") + labs(y = "Total Sold", x = "Month") +
+  scale_x_discrete(breaks = 1:12, labels = c("Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sept", "Oct", "Nov", "Dec"))
+
+```
+
+#No heat
+```{r}
+
+no_heat2 = no_heat %>%
+  mutate(month = month(DATE)) %>%
+  group_by(month) %>%
+  summarise(total = sum(QTY))
+
+ggplot(no_heat2, 
+       aes(x = factor(month), y = total)) + 
+  geom_bar(stat="identity", fill="steelblue", color="black") +
+  ggtitle("Hours Spent on No-Heat Calls") + labs(y = "Hours", x = "Month") +
+  scale_x_discrete(breaks = 1:12, labels = c("Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sept", "Oct", "Nov", "Dec"))
+
+
+```
+
+#No ac
+```{r}
+
+no_acs2 = no_acs %>%
+  mutate(month = month(DATE)) %>%
+  group_by(month) %>%
+  summarise(total = sum(QTY))
+
+ggplot(no_acs2, 
+       aes(x = factor(month), y = total)) + 
+  geom_bar(stat="identity", fill="steelblue", color="black") +
+  ggtitle("Hours Spent on No-Air Conditioning Calls") + labs(y = "Hours", x = "Month") +
+  scale_x_discrete(breaks = 1:12, labels = c("Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sept", "Oct", "Nov", "Dec"))
+
+
+```
+
+# new acs
+```{r}
+
+acs = acs %>%
+  mutate(month = month(DATE))
+
+acs = filter(acs, month == 4 | month == 5 | month == 6 | month == 7 | month == 8)
+acs = select(acs, -month)
+```
+
+# new no heat
+```{r}
+
+no_heat = no_heat %>%
+  mutate(month = month(DATE))
+
+no_heat = filter(no_heat, month == 10 | month == 11 | month == 12 | month == 1 | month == 2 | month == 3 | month == 4)
+
+no_heat = select(no_heat, -month)
+```
+
+# new no ac
+```{r}
+
+no_acs = no_acs %>%
+  mutate(month = month(DATE))
+
+no_acs = filter(no_acs, month == 5 | month == 6 | month == 7 | month == 8)
+no_acs = select(no_acs, -month)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+
+summary(data_filter)
+summary(acs)
+summary(furnaces)
+summary(no_heat)
+summary(no_acs)
+
+```
+
+#Duplicates?
+```{r}
+
+data_filter %>%
+  distinct(DATE)
+
+acs %>%
+  distinct(DATE)
+
+furnaces %>%
+  distinct(DATE)
+
+no_acs %>%
+  distinct(DATE)
+
+no_heat %>%
+  distinct(DATE)
+
+sum(duplicated(data_filter$DATE))
+sum(duplicated(acs$DATE))
+sum(duplicated(furnaces$DATE))
+sum(duplicated(no_heat$DATE))
+sum(duplicated(no_acs$DATE))
+```
+
+
+#Missing data?
+```{r}
+
+data_filter %>% summarise_all(~ sum(is.na(.)))
+acs %>% summarise_all(~ sum(is.na(.)))
+furnaces %>% summarise_all(~ sum(is.na(.)))
+no_heat %>% summarise_all(~ sum(is.na(.)))
+no_acs %>% summarise_all(~ sum(is.na(.)))
+
+```
+
+```{r}
+
+data_filter = na.omit(data_filter)
+acs = na.omit(acs)
+furnaces = na.omit(furnaces)
+no_heat = na.omit(no_heat)
+no_acs = na.omit(no_acs)
+
+```
+
+```{r}
+
+data_filter %>% summarise_all(~ sum(is.na(.)))
+acs %>% summarise_all(~ sum(is.na(.)))
+furnaces %>% summarise_all(~ sum(is.na(.)))
+no_heat %>% summarise_all(~ sum(is.na(.)))
+no_acs %>% summarise_all(~ sum(is.na(.)))
+
+```
+
+
+#Outliers
+```{r}
+
+boxplot(data_filter$totals)
+boxplot(acs$QTY)
+boxplot(furnaces$QTY)
+boxplot(no_acs$QTY)
+boxplot(no_heat$QTY)
+
+```
+
+#Multicollinearity
+```{r}
+
+data_filter %>%
+  ggpairs(c('PRCP', 'SNOW', 'TMAX', 'TMIN', 'TAVG', 'WSF5', 'AWND'))
+
+numbers = select_if(data_filter, is.numeric)
+correlations = cor(numbers, use = "pairwise.complete.obs")
+corrplot(correlations, type = "upper", order = "hclust", col = rev(brewer.pal(n = 8, name = "RdYlBu")))
+
+acs %>%
+   ggpairs(c('PRCP', 'SNOW', 'TMAX', 'TMIN', 'TAVG', 'WSF5', 'AWND'))
+
+numbers = select_if(acs, is.numeric)
+correlations = cor(numbers, use = "pairwise.complete.obs")
+corrplot(correlations, type = "upper", order = "hclust", col = rev(brewer.pal(n = 8, name = "RdYlBu")))
+
+furnaces %>%
+   ggpairs(c('PRCP', 'SNOW', 'TMAX', 'TMIN', 'TAVG', 'WSF5', 'AWND'))
+
+numbers = select_if(furnaces, is.numeric)
+correlations = cor(numbers, use = "pairwise.complete.obs")
+corrplot(correlations, type = "upper", order = "hclust", col = rev(brewer.pal(n = 8, name = "RdYlBu")))
+
+no_heat %>%
+   ggpairs(c('PRCP', 'SNOW', 'TMAX', 'TMIN', 'TAVG', 'WSF5', 'AWND'))
+
+numbers = select_if(no_heat, is.numeric)
+correlations = cor(numbers, use = "pairwise.complete.obs")
+corrplot(correlations, type = "upper", order = "hclust", col = rev(brewer.pal(n = 8, name = "RdYlBu")))
+
+no_acs %>%
+   ggpairs(c('PRCP', 'SNOW', 'TMAX', 'TMIN', 'TAVG', 'WSF5', 'AWND'))
+
+numbers = select_if(no_acs, is.numeric)
+correlations = cor(numbers, use = "pairwise.complete.obs")
+corrplot(correlations, type = "upper", order = "hclust", col = rev(brewer.pal(n = 8, name = "RdYlBu")))
+
+```
+
+# Above 0.75 correlations
+
+filters = TMIN & TMAX, TAVG & TMAX, TAVG & TMIN, AWND & WSF5 - remove TMAX, TMIN, AWND
+acs = TMIN & TMAX, TAVG & TMAX, TAVG & TMIN - remove TMIN
+furnaces = TMIN & TMAX, TAVG & TMAX, TAVG & TMIN, AWND & WSF5 - remove TMIN, TMAX, AWND
+no_heat = TMIN & TMAX, TAVG & TMAX, TAVG & TMIN, AWND & WSF5 - remove TMIN, TMAX, WSF5
+no_acs = TMIN & TMAX, TAVG & TMAX, TAVG & TMIN - remove TMIN
+
+
+#PCA
+
+```{r}
+
+x = data_filter %>%
+  select(c(TMAX, TMIN, TAVG, WSF5, AWND))
+
+pc = prcomp(x, center = T, scale = T)
+summary(pc)$importance
+pc$rotation
+
+```
+```{r}
+
+x = acs %>%
+  select(c(TMIN, TMAX, TAVG))
+
+pc = prcomp(x, center = T, scale = T)
+summary(pc)$importance
+pc$rotation
+
+```
+```{r}
+
+x = furnaces %>%
+  select(c(TMIN, TMAX, TAVG, WSF5, AWND))
+
+pc = prcomp(x, center = T, scale = T)
+summary(pc)$importance
+pc$rotation
+
+```
+
+```{r}
+
+x = no_heat %>%
+  select(c(TMIN, TMAX, TAVG, WSF5, AWND))
+
+pc = prcomp(x, center = T, scale = T)
+summary(pc)$importance
+pc$rotation
+
+```
+
+```{r}
+
+x = no_acs %>%
+  select(c(TAVG, TMIN, TMAX))
+
+pc = prcomp(x, center = T, scale = T)
+summary(pc)$importance
+pc$rotation
+
+```
+
+```{r}
+
+data_filter = data_filter %>%
+  select(-c(TMAX, TMIN, AWND))
+
+acs = acs %>%
+  select(-(TMIN))
+
+furnaces = furnaces %>%
+  select(-c(TMIN, TMAX, AWND))
+
+no_heat = no_heat %>%
+  select(-c(TMIN, TMAX, WSF5))
+
+no_acs = no_acs %>%
+  select(-TMIN)
+
+```
+
+
+```{r}
+
+corrs = cor(acs[,3:9])
+corrplot(corrs, method = 'number')
+
+```
+
+
+```{r}
+
+corrs = cor(furnaces[,3:7])
+corrplot(corrs, method = 'number')
+
+```
+
+```{r}
+
+corrs = cor(no_acs[,3:9])
+corrplot(corrs, method = 'number')
+
+```
+
+```{r}
+
+corrs = cor(no_heat[,3:7])
+corrplot(corrs, method = 'number')
+
+```
+
+```{r}
+
+corrs = cor(data_filter[,2:6])
+corrplot(corrs, method = 'number')
+
+```
+
+
+#A/Cs  
+```{r}
+
+set.seed(123)
+allk = 1:30
+n = dim(acs)[1]
+
+nfolds = 5
+groups = rep(1:nfolds,length=n) 
+cvgroups = sample(groups,n)
+
+allpredictedCV = rep(NA, n)
+allbestTypes = rep(NA,nfolds)
+allbestPars = vector("list",nfolds)
+
+for (j in 1:nfolds)  {  
+  groupj = (cvgroups == j)
+  traindata = acs[!groupj,]
+  validdata = acs[groupj,]
+  
+  #specify data to be used
+  dataused=traindata
+  
+
+  set.seed(123)
+  training = trainControl(method = "cv", number = 5)
+  
+   fit_knn = train(QTY ~ PRCP + SNOW + TMAX + TAVG + WSF5 + AWND,
+                        data = dataused,
+                        method = "knn",
+                        trControl = training,
+                        preProcess = c("center","scale"),
+                        tuneGrid = expand.grid(k = allk))
+
+   fit_ann = train(QTY ~ PRCP + SNOW + TMAX + TAVG + WSF5 + AWND,
+                  data = dataused,
+                  method = "nnet",
+                  tuneGrid = expand.grid(size = 1:8, decay = c(0, 0.5, 10^(-c(1:7)))),
+                  preProcess = c("center", "scale"),
+                  linout = TRUE,
+                  trace = FALSE,
+                  trControl = training)
+   
+   fit_rf = train(QTY ~ PRCP + SNOW + TMAX + TAVG + WSF5 + AWND,
+                  data = dataused,
+                  method = "rf",
+                  tuneGrid = expand.grid(mtry = c(1,2,3,4)),
+                  trControl = training)
+   
+   fit_lin = train(QTY ~ PRCP + SNOW + TMAX + TAVG + WSF5 + AWND,
+                  data = dataused,
+                  method = "lm",
+                  trControl = training)
+   
+  all_best_Types = c("kNN","ANN","RF","Linear")
+  all_best_Pars = list(fit_knn$bestTune,fit_ann$bestTune,fit_rf$bestTune, 6)
+  all_best_Models = list(fit_knn,
+                         fit_ann$finalModel,
+                         fit_rf$finalModel,
+                         fit_lin$finalModel)
+  all_best_rmse = c(min(fit_knn$results$RMSE),
+                    min(fit_ann$results$RMSE),
+                    min(fit_rf$results$RMSE),
+                    fit_lin$results$RMSE)
+  
+  one_best_Type = all_best_Types[which.min(all_best_rmse)]
+  one_best_Pars = all_best_Pars[which.min(all_best_rmse)]
+  one_best_Model = all_best_Models[[which.min(all_best_rmse)]]
+  
+  allbestTypes[j] = one_best_Type
+  allbestPars[[j]] = one_best_Pars
+  
+  if (one_best_Type == "Linear") {  # then best is one of linear models
+    allpredictedCV[groupj] = predict(one_best_Model,validdata)
+  } else if (one_best_Type == "ANN") {  
+    allpredictedCV[groupj]  = predict(one_best_Model,validdata)
+  } else if (one_best_Type == "kNN") {  # then best is one of kNN models
+    allpredictedCV[groupj] = one_best_Model %>% predict(validdata)
+  } else if (one_best_Type == "RF") {
+    allpredictedCV[groupj] = predict(one_best_Model,validdata)
+  }
+  
+}
+
+```
+
+```{r}
+
+#Predictions
+
+y = acs$QTY
+RMSE = sqrt(mean((allpredictedCV-y)^2)); RMSE
+R2 = 1-sum((allpredictedCV-y)^2)/sum((y-mean(y))^2); R2
+
+
+```
+
+```{r}
+
+#ANN
+
+set.seed(123)
+training = trainControl(method = "cv", number = 5)
+fit_ann = train(QTY ~ PRCP + SNOW + TMAX + TAVG + WSF5 + AWND,
+                  data = acs,
+                  method = "nnet",
+                  tuneGrid = expand.grid(size = 1, decay = 0.1),
+                  preProcess = c("center", "scale"),
+                  linout = TRUE,
+                  trace = FALSE,
+                  trControl = training)
+
+predictions = predict(fit_ann)
+y = acs$QTY
+RMSE = sqrt(mean((predictions-y)^2)); RMSE 
+R2 = 1-sum((predictions-y)^2)/sum((y-mean(y))^2); R2
+
+```
+
+```{r}
+
+plot_data = data.frame(predictions, y)
+ggplot(plot_data, aes(x = predictions, y = y)) + geom_point() + labs(x = "Predictions", y = "Actual A/Cs Sold") + ggtitle("Predictions of A/Cs Sold") + geom_abline(intercept = 0, slope = 1, color = "red")
+
+```
+
+```{r}
+
+fit_rf = randomForest(QTY ~ PRCP + SNOW + TMAX + TAVG + WSF5 + AWND,
+                  data = acs,
+                  mtry = 1, importance = TRUE)
+
+varImp(fit_ann)
+garson(fit_ann)
+importance(fit_rf)
+varImpPlot(fit_rf)
+
+imp = data.frame(Variable = rownames(fit_rf$importance),
+                 IncNodePurity = fit_rf$importance)
+imp %>%
+  mutate(Variable = reorder(Variable, -IncNodePurity.IncNodePurity)) %>%
+  gf_col(IncNodePurity.IncNodePurity ~ Variable, title = "RF Variable Importance for A/Cs", ylab = "Mean Decrease Gini", fill = "steelblue", color="black")
+
+ggplot(acs, aes(x = TMAX, y = QTY)) + geom_point() + geom_smooth(method = lm, se = FALSE, color = "red") + ggtitle("A/Cs Sold For Average Temperature") + labs(x = "Average Temp (F)", y = "A/Cs Sold")
+
+```
+
+#Furnaces 
+```{r}
+
+set.seed(123)
+allk = 1:50
+n = dim(furnaces)[1]
+
+nfolds = 5
+groups = rep(1:nfolds,length=n) 
+cvgroups = sample(groups,n)
+
+allpredictedCV = rep(NA, n)
+allbestTypes = rep(NA,nfolds)
+allbestPars = vector("list",nfolds)
+
+for (j in 1:nfolds)  {  
+  groupj = (cvgroups == j)
+  traindata = furnaces[!groupj,]
+  validdata = furnaces[groupj,]
+  
+  #specify data to be used
+  dataused=traindata
+  
+
+  set.seed(123)
+  training = trainControl(method = "cv", number = 5)
+  
+   fit_knn = train(QTY ~ PRCP + SNOW + TAVG + WSF5,
+                        data = dataused,
+                        method = "knn",
+                        trControl = training,
+                        preProcess = c("center","scale"),
+                        tuneGrid = expand.grid(k = allk))
+
+   fit_ann = train(QTY ~ PRCP + SNOW + TAVG + WSF5,
+                  data = dataused,
+                  method = "nnet",
+                  tuneGrid = expand.grid(size = 1:6, decay = c(0, 0.5, 10^(-c(1:7)))),
+                  preProcess = c("center", "scale"),
+                  linout = TRUE,
+                  trace = FALSE,
+                  trControl = training)
+   
+   fit_rf = train(QTY ~ PRCP + SNOW + TAVG + WSF5,
+                  data = dataused,
+                  method = "rf",
+                  tuneGrid = expand.grid(mtry = c(1,2,3,4)),
+                  trControl = training)
+   
+   fit_lin = train(QTY ~ PRCP + SNOW + TAVG + WSF5,
+                  data = dataused,
+                  method = "lm",
+                  trControl = training)
+   
+  all_best_Types = c("kNN","ANN","RF","Linear")
+  all_best_Pars = list(fit_knn$bestTune,fit_ann$bestTune,fit_rf$bestTune, 4)
+  all_best_Models = list(fit_knn,
+                         fit_ann$finalModel,
+                         fit_rf$finalModel,
+                         fit_lin$finalModel)
+  all_best_rmse = c(min(fit_knn$results$RMSE),
+                    min(fit_ann$results$RMSE),
+                    min(fit_rf$results$RMSE),
+                    fit_lin$results$RMSE)
+  
+  one_best_Type = all_best_Types[which.min(all_best_rmse)]
+  one_best_Pars = all_best_Pars[which.min(all_best_rmse)]
+  one_best_Model = all_best_Models[[which.min(all_best_rmse)]]
+  
+  allbestTypes[j] = one_best_Type
+  allbestPars[[j]] = one_best_Pars
+  
+    if (one_best_Type == "Linear") {  # then best is one of linear models
+    allpredictedCV[groupj] = predict(one_best_Model,validdata)
+  } else if (one_best_Type == "ANN") {  
+    allpredictedCV[groupj]  = predict(one_best_Model,validdata)
+  } else if (one_best_Type == "kNN") {  # then best is one of kNN models
+    allpredictedCV[groupj] = one_best_Model %>% predict(validdata)
+  } else if (one_best_Type == "RF") {
+    allpredictedCV[groupj] = predict(one_best_Model,validdata)
+  }
+  
+  
+}
+
+```
+
+```{r}
+
+#Predictions
+
+y = furnaces$QTY
+RMSE = sqrt(mean((allpredictedCV-y)^2)); RMSE 
+R2 = 1-sum((allpredictedCV-y)^2)/sum((y-mean(y))^2); R2
+
+```
+
+```{r}
+
+#Linear
+
+set.seed(123)
+training = trainControl(method = "cv", number = 5)
+fit_lin = train(QTY ~ PRCP + SNOW + TAVG + WSF5,
+                  data = furnaces,
+                  method = "lm",
+                  trControl = training)
+
+predictions = predict(fit_lin)
+y = furnaces$QTY
+RMSE = sqrt(mean((predictions-y)^2)); RMSE 
+R2 = 1-sum((predictions-y)^2)/sum((y-mean(y))^2); R2
+
+```
+
+```{r}
+
+plot_data = data.frame(predictions, y)
+ggplot(plot_data, aes(x = predictions, y = y)) + geom_point() + labs(x = "Predictions", y = "Actual Furnaces Sold") + ggtitle("Predictions of Furnaces Sold") + geom_abline(intercept = 0, slope = 1, color = "red")
+
+```
+
+```{r}
+
+fit_ann = train(QTY ~ PRCP + SNOW + TAVG + WSF5,
+                  data = furnaces,
+                  method = "nnet",
+                  tuneGrid = expand.grid(size = 1, decay = 0),
+                  preProcess = c("center", "scale"),
+                  linout = TRUE,
+                  trace = FALSE,
+                  trControl = training)
+
+fit_rf = randomForest(QTY ~ PRCP + SNOW + TAVG + WSF5,
+                  data =furnaces,
+                  mtry = 1, importance = TRUE)
+
+varImp(fit_ann)
+garson(fit_ann)
+importance(fit_rf)
+varImpPlot(fit_rf)
+
+imp = data.frame(Variable = rownames(fit_rf$importance),
+                 IncNodePurity = fit_rf$importance)
+imp %>%
+  mutate(Variable = reorder(Variable, -IncNodePurity.IncNodePurity)) %>%
+  gf_col(IncNodePurity.IncNodePurity ~ Variable, title = "RF Variable Importance for Furnaces", ylab = "Mean Decrease Gini", fill = "steelblue", color="black")
+
+ggplot(furnaces, aes(x = TAVG, y = QTY)) + geom_point() + geom_smooth(method = lm, se = FALSE, color = "red") + ggtitle("Furnaces Sold For Average Temperature") + labs(x = "Average Temp (F)", y = "Furnaces Sold")
+
+```
+
+#No heat 
+```{r}
+
+set.seed(123)
+allk = 1:40
+n = dim(no_heat)[1]
+
+nfolds = 5
+groups = rep(1:nfolds,length=n) 
+cvgroups = sample(groups,n)
+
+allpredictedCV = rep(NA, n)
+allbestTypes = rep(NA,nfolds)
+allbestPars = vector("list",nfolds)
+
+for (j in 1:nfolds)  {  
+  groupj = (cvgroups == j)
+  traindata = no_heat[!groupj,]
+  validdata = no_heat[groupj,]
+  
+  #specify data to be used
+  dataused=traindata
+  
+
+  set.seed(123)
+  training = trainControl(method = "cv", number = 5)
+  
+   fit_knn = train(QTY ~ PRCP + SNOW + TAVG + AWND,
+                        data = dataused,
+                        method = "knn",
+                        trControl = training,
+                        preProcess = c("center","scale"),
+                        tuneGrid = expand.grid(k = allk))
+
+   fit_ann = train(QTY ~ PRCP + SNOW + TAVG + AWND,
+                  data = dataused,
+                  method = "nnet",
+                  tuneGrid = expand.grid(size = 1:6, decay = c(0, 0.5, 10^(-c(1:7)))),
+                  preProcess = c("center", "scale"),
+                  linout = TRUE,
+                  trace = FALSE,
+                  trControl = training)
+   
+   fit_rf = train(QTY ~ PRCP + SNOW + TAVG + AWND,
+                  data = dataused,
+                  method = "rf",
+                  tuneGrid = expand.grid(mtry = c(1,2,3,4)),
+                  trControl = training)
+   
+   fit_lin = train(QTY ~ PRCP + SNOW + TAVG + AWND,
+                  data = dataused,
+                  method = "lm",
+                  trControl = training)
+   
+  all_best_Types = c("kNN","ANN","RF","Linear")
+  all_best_Pars = list(fit_knn$bestTune,fit_ann$bestTune,fit_rf$bestTune, 4)
+  all_best_Models = list(fit_knn,
+                         fit_ann$finalModel,
+                         fit_rf$finalModel,
+                         fit_lin$finalModel)
+  all_best_rmse = c(min(fit_knn$results$RMSE),
+                    min(fit_ann$results$RMSE),
+                    min(fit_rf$results$RMSE),
+                    fit_lin$results$RMSE)
+  
+  one_best_Type = all_best_Types[which.min(all_best_rmse)]
+  one_best_Pars = all_best_Pars[which.min(all_best_rmse)]
+  one_best_Model = all_best_Models[[which.min(all_best_rmse)]]
+  
+  allbestTypes[j] = one_best_Type
+  allbestPars[[j]] = one_best_Pars
+  
+  
+    if (one_best_Type == "Linear") {  # then best is one of linear models
+    allpredictedCV[groupj] = predict(one_best_Model,validdata)
+  } else if (one_best_Type == "ANN") {  
+    allpredictedCV[groupj]  = predict(one_best_Model,validdata)
+  } else if (one_best_Type == "kNN") {  # then best is one of kNN models
+    allpredictedCV[groupj] = one_best_Model %>% predict(validdata)
+  } else if (one_best_Type == "RF") {
+    allpredictedCV[groupj] = predict(one_best_Model,validdata)
+  }
+  
+}
+
+```
+
+```{r}
+
+#Predictions
+
+y = no_heat$QTY
+RMSE = sqrt(mean((allpredictedCV-y)^2)); RMSE 
+R2 = 1-sum((allpredictedCV-y)^2)/sum((y-mean(y))^2); R2
+
+
+```
+
+```{r}
+
+#knn
+
+set.seed(123)
+training = trainControl(method = "cv", number = 5)
+fit_knn = train(QTY ~ PRCP + SNOW + TAVG + AWND,
+                        data = no_heat,
+                        method = "knn",
+                        trControl = training,
+                        preProcess = c("center","scale"),
+                        tuneGrid = data.frame(k = 38))
+
+predictions = predict(fit_knn)
+y = no_heat$QTY
+RMSE = sqrt(mean((predictions-y)^2)); RMSE 
+R2 = 1-sum((predictions-y)^2)/sum((y-mean(y))^2); R2
+
+```
+
+```{r}
+
+plot_data = data.frame(predictions, y)
+ggplot(plot_data, aes(x = predictions, y = y)) + geom_point() + labs(x = "Predictions", y = "Actual Time Spent on No-Heat Calls (hours)") + ggtitle("Predictions of Time Spent on No-Heat Calls") + geom_abline(intercept = 0, slope = 1, color = "red")
+
+```
+
+```{r}
+
+fit_ann = train(QTY ~ PRCP + SNOW + TAVG + AWND,
+                  data = no_heat,
+                  method = "nnet",
+                  tuneGrid = expand.grid(size = 4, decay = 0.5),
+                  preProcess = c("center", "scale"),
+                  linout = TRUE,
+                  trace = FALSE,
+                  trControl = training)
+   
+fit_rf = randomForest(QTY ~ PRCP + SNOW + TAVG + AWND,
+                  data = no_heat,
+                  mtry = 1, importance = TRUE)
+
+varImp(fit_ann)
+garson(fit_ann,)
+importance(fit_rf)
+varImpPlot(fit_rf)
+
+imp = data.frame(Variable = rownames(fit_rf$importance),
+                 IncNodePurity = fit_rf$importance)
+imp %>%
+  mutate(Variable = reorder(Variable, -IncNodePurity.IncNodePurity)) %>%
+  gf_col(IncNodePurity.IncNodePurity ~ Variable, title = "RF Variable Importance for No-Heat Calls", ylab = "Mean Decrease Gini", fill = "steelblue", color="black")
+
+ggplot(no_heat, aes(x = TAVG, y = QTY)) + geom_point() + geom_smooth(method = lm, se = FALSE, color = "red") + ggtitle("Time Spent on No-Heat Calls For Average Temperature") + labs(x = "Average Temp (F)", y = "Time Spent on No-Heat Calls (Hours)")
+
+```
+
+#No A/C    
+```{r}
+
+set.seed(123)
+allk = 1:30
+n = dim(no_acs)[1]
+
+nfolds = 5
+groups = rep(1:nfolds,length=n) 
+cvgroups = sample(groups,n)
+
+allpredictedCV = rep(NA, n)
+allbestTypes = rep(NA,nfolds)
+allbestPars = vector("list",nfolds)
+
+for (j in 1:nfolds)  {  
+  groupj = (cvgroups == j)
+  traindata = no_acs[!groupj,]
+  validdata = no_acs[groupj,]
+  
+  #specify data to be used
+  dataused=traindata
+  
+
+  set.seed(123)
+  training = trainControl(method = "cv", number = 5)
+  
+   fit_knn = train(QTY ~ PRCP + SNOW + TMAX +TAVG + WSF5 + AWND,
+                        data = dataused,
+                        method = "knn",
+                        trControl = training,
+                        preProcess = c("center","scale"),
+                        tuneGrid = expand.grid(k = allk))
+
+   fit_ann = train(QTY ~ PRCP + SNOW + TMAX +TAVG + WSF5 + AWND,
+                  data = dataused,
+                  method = "nnet",
+                  tuneGrid = expand.grid(size = 1:8, decay = c(0, 0.5, 10^(-c(1:7)))),
+                  preProcess = c("center", "scale"),
+                  linout = TRUE,
+                  trace = FALSE,
+                  trControl = training)
+   
+   fit_rf = train(QTY ~ PRCP + SNOW + TMAX +TAVG + WSF5 + AWND,
+                  data = dataused,
+                  method = "rf",
+                  tuneGrid = expand.grid(mtry = c(1,2,3,4)),
+                  trControl = training)
+   
+   fit_lin = train(QTY ~ PRCP + SNOW + TMAX +TAVG + WSF5 + AWND,
+                  data = dataused,
+                  method = "lm",
+                  trControl = training)
+   
+  all_best_Types = c("kNN","ANN","RF","Linear")
+  all_best_Pars = list(fit_knn$bestTune,fit_ann$bestTune,fit_rf$bestTune, 6)
+  all_best_Models = list(fit_knn,
+                         fit_ann$finalModel,
+                         fit_rf$finalModel,
+                         fit_lin$finalModel)
+  all_best_rmse = c(min(fit_knn$results$RMSE),
+                    min(fit_ann$results$RMSE),
+                    min(fit_rf$results$RMSE),
+                    fit_lin$results$RMSE)
+  
+  one_best_Type = all_best_Types[which.min(all_best_rmse)]
+  one_best_Pars = all_best_Pars[which.min(all_best_rmse)]
+  one_best_Model = all_best_Models[[which.min(all_best_rmse)]]
+  
+  allbestTypes[j] = one_best_Type
+  allbestPars[[j]] = one_best_Pars
+  
+  if (one_best_Type == "Linear") {  # then best is one of linear models
+    allpredictedCV[groupj] = predict(one_best_Model,validdata)
+  } else if (one_best_Type == "ANN") {  
+    allpredictedCV[groupj]  = predict(one_best_Model,validdata)
+  } else if (one_best_Type == "kNN") {  # then best is one of kNN models
+    allpredictedCV[groupj] = one_best_Model %>% predict(validdata)
+  } else if (one_best_Type == "RF") {
+    allpredictedCV[groupj] = predict(one_best_Model,validdata)
+  }
+  
+}
+
+```
+
+```{r}
+
+#Predictions
+
+y = no_acs$QTY
+RMSE = sqrt(mean((allpredictedCV-y)^2)); RMSE 
+R2 = 1-sum((allpredictedCV-y)^2)/sum((y-mean(y))^2); R2
+
+```
+
+```{r}
+
+#ANN
+
+set.seed(123)
+training = trainControl(method = "cv", number = 5)
+fit_ann = train(QTY ~ PRCP + SNOW + TMAX +TAVG + WSF5 + AWND,
+                  data = no_acs,
+                  method = "nnet",
+                  tuneGrid = expand.grid(size = 1, decay = 0.01),
+                  preProcess = c("center", "scale"),
+                  linout = TRUE,
+                  trace = FALSE,
+                  trControl = training)
+
+predictions = predict(fit_ann)
+y = no_acs$QTY
+RMSE = sqrt(mean((predictions-y)^2)); RMSE 
+R2 = 1-sum((predictions-y)^2)/sum((y-mean(y))^2); R2
+
+```
+
+```{r}
+
+plot_data = data.frame(predictions, y)
+ggplot(plot_data, aes(x = predictions, y = y)) + geom_point() + labs(x = "Predictions", y = "Actual Time Spent on No-A/C Calls (hours)") + ggtitle("Predictions of Time Spent on No-A/C Calls") + geom_abline(intercept = 0, slope = 1, color = "red")
+
+```
+
+```{r}
+
+fit_rf = randomForest(QTY ~ PRCP + SNOW + TMAX +TAVG + WSF5 + AWND,
+                  data = no_acs,
+                  mtry = 1, importance = TRUE)
+
+varImp(fit_ann)
+garson(fit_ann)
+importance(fit_rf)
+varImpPlot(fit_rf)
+
+imp = data.frame(Variable = rownames(fit_rf$importance),
+                 IncNodePurity = fit_rf$importance)
+imp %>%
+  mutate(Variable = reorder(Variable, -IncNodePurity.IncNodePurity)) %>%
+  gf_col(IncNodePurity.IncNodePurity ~ Variable, title = "RF Variable Importance for No A/C Calls", ylab = "Mean Decrease Gini", fill = "steelblue", color="black")
+
+ggplot(no_acs, aes(x = TAVG, y = QTY)) + geom_point() + geom_smooth(method = lm, se = FALSE, color = "red") + ggtitle("Time Spent on No-A/C Calls For Average Temperature") + labs(x = "Average Temp (F)", y = "Time Spent on No-A/C Calls (Hours)")
+
+```
+
+#Filters  
+```{r}
+
+set.seed(123)
+allk = 1:60
+n = dim(data_filter)[1]
+
+nfolds = 5
+groups = rep(1:nfolds,length=n) 
+cvgroups = sample(groups,n)
+
+allpredictedCV = rep(NA, n)
+allbestTypes = rep(NA,nfolds)
+allbestPars = vector("list",nfolds)
+
+for (j in 1:nfolds)  {  
+  groupj = (cvgroups == j)
+  traindata = data_filter[!groupj,]
+  validdata = data_filter[groupj,]
+  
+  #specify data to be used
+  dataused=traindata
+  
+
+  set.seed(123)
+  training = trainControl(method = "cv", number = 5)
+  
+   fit_knn = train(totals ~ PRCP + SNOW + TAVG + WSF5,
+                        data = dataused,
+                        method = "knn",
+                        trControl = training,
+                        preProcess = c("center","scale"),
+                        tuneGrid = expand.grid(k = allk))
+
+   fit_ann = train(totals ~ PRCP + SNOW + TAVG + WSF5,
+                  data = dataused,
+                  method = "nnet",
+                  tuneGrid = expand.grid(size = 1:6, decay = c(0, 0.5, 10^(-c(1:7)))),
+                  preProcess = c("center", "scale"),
+                  linout = TRUE,
+                  trace = FALSE,
+                  trControl = training)
+   
+   fit_rf = train(totals ~ PRCP + SNOW + TAVG + WSF5,
+                  data = dataused,
+                  method = "rf",
+                  tuneGrid = expand.grid(mtry = c(1,2,3,4)),
+                  trControl = training)
+   
+   fit_lin = train(totals ~ PRCP + SNOW + TAVG + WSF5,
+                  data = dataused,
+                  method = "lm",
+                  trControl = training)
+   
+  all_best_Types = c("kNN","ANN","RF","Linear")
+  all_best_Pars = list(fit_knn$bestTune,fit_ann$bestTune,fit_rf$bestTune, 4)
+  all_best_Models = list(fit_knn,
+                         fit_ann$finalModel,
+                         fit_rf$finalModel,
+                         fit_lin$finalModel)
+  all_best_rmse = c(min(fit_knn$results$RMSE),
+                    min(fit_ann$results$RMSE),
+                    min(fit_rf$results$RMSE),
+                    fit_lin$results$RMSE)
+  
+  one_best_Type = all_best_Types[which.min(all_best_rmse)]
+  one_best_Pars = all_best_Pars[which.min(all_best_rmse)]
+  one_best_Model = all_best_Models[[which.min(all_best_rmse)]]
+  
+  allbestTypes[j] = one_best_Type
+  allbestPars[[j]] = one_best_Pars
+  
+    if (one_best_Type == "Linear") {  # then best is one of linear models
+    allpredictedCV[groupj] = predict(one_best_Model,validdata)
+  } else if (one_best_Type == "ANN") {  
+    allpredictedCV[groupj]  = predict(one_best_Model,validdata)
+  } else if (one_best_Type == "kNN") {  # then best is one of kNN models
+    allpredictedCV[groupj] = one_best_Model %>% predict(validdata)
+  } else if (one_best_Type == "RF") {
+    allpredictedCV[groupj] = predict(one_best_Model,validdata)
+  }
+  
+}
+
+```
+
+```{r}
+
+#Predictions
+
+y = data_filter$totals
+RMSE = sqrt(mean((allpredictedCV-y)^2)); RMSE 
+R2 = 1-sum((allpredictedCV-y)^2)/sum((y-mean(y))^2); R2
+
+```
+
+```{r}
+
+#ANN
+
+set.seed(123)
+training = trainControl(method = "cv", number = 5)
+fit_ann = train(totals ~ PRCP + SNOW + TAVG + WSF5,
+                  data = data_filter,
+                  method = "nnet",
+                  tuneGrid = expand.grid(size = 1, decay = 0.5),
+                  preProcess = c("center", "scale"),
+                  linout = TRUE,
+                  trace = FALSE,
+                  trControl = training)
+
+predictions = predict(fit_ann)
+y = data_filter$totals
+RMSE = sqrt(mean((predictions-y)^2)); RMSE 
+R2 = 1-sum((predictions-y)^2)/sum((y-mean(y))^2); R2
+
+```
+
+```{r}
+
+plot_data = data.frame(predictions, y)
+ggplot(plot_data, aes(x = predictions, y = y)) + geom_point() + labs(x = "Predictions", y = "Actual Filters Sold") + ggtitle("Predictions of Filters Sold") + geom_abline(intercept = 0, slope = 1, color = "red")
+
+```
+
+```{r}
+
+fit_rf = randomForest(totals ~ PRCP + SNOW + TAVG + WSF5,
+                  data = data_filter,
+                  mtry = 1, importance = TRUE)
+
+varImp(fit_ann)
+garson(fit_ann)
+importance(fit_rf)
+varImpPlot(fit_rf)
+
+imp = data.frame(Variable = rownames(fit_rf$importance),
+                 IncNodePurity = fit_rf$importance)
+imp %>%
+  mutate(Variable = reorder(Variable, -IncNodePurity.IncNodePurity)) %>%
+  gf_col(IncNodePurity.IncNodePurity ~ Variable, title = "RF Variable Importance for Filters", ylab = "Mean Decrease Gini", fill = "steelblue", color="black")
+
+ggplot(data_filter, aes(x = TAVG, y = totals)) + geom_point() + geom_smooth(method = lm, se = FALSE, color = "red") + ggtitle("Filters Sold For Average Temperature") + labs(x = "Average Temp (F)", y = "Filters Sold")
+
+```
+
